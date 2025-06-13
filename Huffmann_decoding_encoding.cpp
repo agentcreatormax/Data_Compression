@@ -13,7 +13,6 @@ class Node {
 
     friend class Encode;
     friend class Decode;
-    friend class EnhancedEncoding;
 
     public:
     Node(){
@@ -55,6 +54,16 @@ class Encode{
     map<char,int> freq;
     string s;
 
+    public:
+    Encode(string s_){
+        s = s_;
+        // build frequnecy table
+        for(int i=0;i<s.size();i++){
+            freq[s[i]]++;
+        }
+    }
+
+    
     void buildCode(Node* node, string code, map<char, string>& huffCode) {
         if (!node) return;
         if (!node->left && !node->right) {
@@ -63,15 +72,6 @@ class Encode{
         }
         buildCode(node->left, code + "0", huffCode);
         buildCode(node->right, code + "1", huffCode);
-    }
-
-    public:
-    Encode(string s_){
-        s = s_;
-        // build frequnecy table
-        for(int i=0;i<s.size();i++){
-            freq[s[i]]++;
-        }
     }
 
     Node* BuildTreeFromFrequencyTable(){
@@ -205,138 +205,132 @@ class Decode{
     }
 };
 
-// the input of frequency table are provided in a non decreasing order
-// which reduces time complexity from O(ClogC) to O(C)
-class EnhancedEncoding{
-    private:
-    map<char,int> freq;
-
-    public:
-    // input is a map of character and its frequency in sorted order
-    EnhancedEncoding(map<char,int> mp){
-        freq = mp;
-    }
-    Node* BuildTree(){
-        Node* prev = nullptr;
-        for (auto it = freq.begin(); it != freq.end(); it++) {
-            Node* cur = new Node(it->first, it->second);
-            if(!prev){
-                prev = cur;
-            }
-            else{
-                Node* temp = nullptr;
-                if(cur->freq <= prev->freq){
-                    temp = new Node(cur, prev);
-                } 
-                else{
-                    temp = new Node(prev, cur);
-                }
-                prev = temp;
-            }
-        }
-        return prev;
-    }
-
-    void printTree(Node* node){
-        if(node==nullptr) return;
-        if (!node->left && !node->right) {
-            cout << node->ch;
-            return;
-        }
-
-        cout << "(";
-        printTree(node->left);
-        cout << ",";
-        printTree(node->right);
-        cout << ")";
-    }
-};
-
-int main()
-{
-    cout << "Do you want to Encode or Decode? (E/D): \n";
-    char choice; cin >> choice;
+int main() {
+    int option;
+    cout << "You want to compress or decompress?\n";
+    cout << "1 -- compress\n";
+    cout << "2 -- decompress\n";
+    cout << "Enter your option: ";
+    cin >> option;
     cin.ignore();
 
-    if (choice == 'E' || choice == 'e') {
-        cout << "Do you want Enhanced Encoding? (Y/N): ";
-        cout << "(If yes, then you need to provide the frequency of each character in sorted way)\n";
-        char enhancedChoice; cin >> enhancedChoice;
+    if (option == 1) {
+        string file1, file2;
+        cout << "Enter the name of the file you want to compress: ";
+        cin >> file1;
+        cout << "Enter the name of the file you want to save the compressed data: ";
+        cin >> file2;
         cin.ignore();
 
-        if (enhancedChoice == 'Y' || enhancedChoice == 'y') {
-            // Enhanced Encoding
-            int n;
-            cout << "Enter number of unique characters: ";
-            cin >> n;
-            cin.ignore();
-
-            map<char, int> freqMap;
-            cout << "Enter character and its frequency (sorted by frequency):\n";
-            for (int i = 0; i < n; i++) {
-                char c; int f;
-                cin >> c >> f;
-                cin.ignore();
-                freqMap[c] = f;
-            }
-
-            EnhancedEncoding enhancedEncoder(freqMap);
-            Node* root = enhancedEncoder.BuildTree();
-
-            cout << "Huffman Tree (Enhanced Encoding): ";
-            enhancedEncoder.printTree(root);
-            cout << "\n";
-
-            // Note: EnhancedEncoding class does not provide encoding function directly,
-            // so encoding string must be done manually if needed.
-
-        } else {
-            // Normal Encoding
-            cout << "Enter string to encode: ";
-            string input;
-            getline(cin, input);
-
-            Encode encoder(input);
-            encoder.printFreqTable();
-
-            Node* root = encoder.BuildTreeFromFrequencyTable();
-            cout << "Huffman Tree: ";
-            encoder.printTree(root);
-            cout << "\n";
-
-            string encodedStr = encoder.EncodedString();
-            cout << "Encoded string: " << encodedStr << "\n";
-
+        ifstream input(file1);
+        if (!input.is_open()) {
+            cout << "Failed to open input file.\n";
+            return 1;
         }
 
-    } else if (choice == 'D' || choice == 'd') {
-        // Decoding
+        string s, line;
+        while (getline(input, line)) {
+            s += line + '\n';
+        }
+        input.close();
+
+        if (s.empty()) {
+            cout << "Input file is empty.\n";
+            return 1;
+        }
+
+        if (!s.empty() && s.back() == '\n') s.pop_back(); // Remove trailing newline
+
+        Encode encoder(s);
+        encoder.printFreqTable();  // Print frequency table
+
+        Node* root = encoder.BuildTreeFromFrequencyTable();
+        cout << "Huffman Tree: ";
+        encoder.printTree(root);  // Print tree
+        cout << '\n';
+
+        map<char, string> huffCode;
+        encoder.buildCode(root, "", huffCode);
+
+        string encodedStr = encoder.EncodedString();
+
+        ofstream output(file2);
+        if (!output.is_open()) {
+            cout << "Failed to open output file.\n";
+            return 1;
+        }
+
+        output << huffCode.size() << '\n';
+        for (auto& p : huffCode) {
+            output << p.first << ' ' << p.second << '\n';
+        }
+
+        output << encodedStr << '\n';
+        output.close();
+
+        cout << "Compression completed. Data saved to " << file2 << '\n';
+    }
+
+
+    else if (option == 2) {
+        string file, outputFile;
+        cout << "Enter the name of the compressed file: ";
+        cin >> file;
+        cout << "Enter the name of the file you want to save the decompressed data: ";
+        cin >> outputFile;
+        cin.ignore();
+
+        ifstream input(file);
+        if (!input.is_open()) {
+            cout << "Failed to open compressed file.\n";
+            return 1;
+        }
+
         int n;
-        cout << "Enter number of unique characters in code map: ";
-        cin >> n;
-        cin.ignore();
+        input >> n;
+        input.ignore();
 
-        map<char, string> codes;
-        cout << "Enter character and its code:\n";
-        for (int i = 0; i < n; i++) {
-            char c; string code;
-            cin >> c >> code;
-            cin.ignore();
-            codes[c] = code;
+        map<char, string> codeMap;
+        for (int i = 0; i < n; ++i) {
+            char c;
+            string code;
+            input >> c >> code;
+            input.ignore();
+            codeMap[c] = code;
         }
 
-        cout << "Enter encoded string to decode: ";
         string encodedStr;
-        getline(cin, encodedStr);
+        getline(input, encodedStr);
+        input.close();
 
-        Decode decoder(codes, encodedStr);
+        if (encodedStr.empty()) {
+            cout << "Input file is empty.\n";
+            return 1;
+        }
+
+        Decode decoder(codeMap, encodedStr);
         string decodedStr = decoder.TreeDecoder();
-        if(decoder.check())
-        cout << "Decoded string: " << decodedStr << "\n";
-        else cout << decodedStr << "\n";
 
-    } else {
-        cout << "Invalid choice! Exiting.\n";
+        if (!decoder.check()) {
+            cout << "Decoding failed: " << decodedStr << '\n';
+            return 1;
+        }
+
+        ofstream out(outputFile);
+        if (!out.is_open()) {
+            cout << "Failed to open output file.\n";
+            return 1;
+        }
+
+        out << decodedStr << '\n';
+        out.close();
+
+        cout << "Decompression completed. Decoded data saved to " << outputFile << '\n';
+    }
+
+
+    else {
+        cout << "Invalid option\n";
     }
 
     return 0;
